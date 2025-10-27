@@ -47,7 +47,7 @@ def load_lang_codes():
     languages = load_languages()
     return tuple(l.code for l in languages)
 
-def detect_languages(text):
+def detect_languages(text, min_confidence=0):
     # detect batch processing
     if isinstance(text, list):
         is_batch = True
@@ -61,7 +61,7 @@ def detect_languages(text):
     candidates = []
     for t in text:
         try:
-            d = Detector(lang_codes).detect(t)
+            d = Detector(lang_codes, min_confidence).detect(t)
             for i in range(len(d)):
                 d[i].text_length = len(t)
             candidates.extend(d)

@@ -29,20 +29,29 @@ def normalized_lang_code(lang):
   return code
 
 class Detector:
-  def __init__(self, langcodes = ()):
+  def __init__(self, langcodes = (), min_confidence = 0):
     self.langcodes = langcodes
+    self.min_confidence = min_confidence
 
   def detect(self, text):
     if len(text) < 20:
       code, conf = lldetect(text, self.langcodes)
       if conf > 0:
-        return [Language(code, round(conf * 100))]
+        confidence_pct = round(conf * 100)
+        if confidence_pct < self.min_confidence:
+          return [Language("en", 0)]
+        return [Language(code, confidence_pct)]
 
     try:
       top_3_choices = [lang for lang in detect_langs(text) if check_lang(self.langcodes, lang)][:3]
       if not len(top_3_choices):
         return [Language("en", 0)]
       if top_3_choices[0].prob == 0:
+        return [Language("en", 0)]
+
+      # Check minimum confidence threshold
+      top_confidence = round(top_3_choices[0].prob * 100)
+      if top_confidence < self.min_confidence:
         return [Language("en", 0)]
     except LangDetectException as e:
       if e.code == ErrorCode.CantDetectError:

@@ -192,6 +192,16 @@ _default_options_objects = [
         'value_type': 'int'
     },
     {
+        'name': 'QUALITY_LEVEL',
+        'default_value': 'standard',
+        'value_type': 'str'
+    },
+    {
+        'name': 'MIN_CONFIDENCE',
+        'default_value': 0,
+        'value_type': 'int'
+    },
+    {
         'name': 'THREADS',
         'default_value': 4,
         'value_type': 'int'

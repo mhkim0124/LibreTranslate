@@ -768,7 +768,7 @@ def create_app(args):
         translatable = detect_translatable(src_texts)
         if translatable:
           if source_lang == "auto":
-              candidate_langs = detect_languages(src_texts)
+              candidate_langs = detect_languages(src_texts, args.min_confidence)
               detected_src_lang = candidate_langs[0]
           else:
               detected_src_lang = {"confidence": 100.0, "language": source_lang}
@@ -802,12 +802,47 @@ def create_app(args):
 
                     if translatable:
                       if text_format == "html":
-                          translated_text = unescape(str(translate_html(translator, text)))
-                          alternatives = [] # Not supported for html yet
+                          # Generate hypotheses for HTML format based on quality level
+                          if args.quality_level in ['high', 'standard'] and num_alternatives > 0:
+                              # Extract text from HTML and generate multiple translations
+                              from bs4 import BeautifulSoup
+                              soup = BeautifulSoup(text, 'html.parser')
+                              text_content = soup.get_text()
+
+                              # Generate hypotheses for the text content
+                              hypotheses = translator.hypotheses(text_content, num_alternatives + 1)
+
+                              # Use the best translation for HTML
+                              translated_text = unescape(str(translate_html(translator, text)))
+
+                              # Generate alternative HTML translations
+                              alternatives = []
+                              for i in range(1, min(len(hypotheses), num_alternatives + 1)):
+                                  # For alternatives, we'll provide translated text versions
+                                  alt_text = unescape(improve_translation_formatting(text_content, hypotheses[i].value))
+                                  alternatives.append(alt_text)
+                          else:
+                              translated_text = unescape(str(translate_html(translator, text)))
+                              alternatives = []
                       else:
                           hypotheses = translator.hypotheses(text, num_alternatives + 1)
                           translated_text = unescape(improve_translation_formatting(text, hypotheses[0].value))
-                          alternatives = filter_unique([unescape(improve_translation_formatting(text, hypotheses[i].value)) for i in range(1, len(hypotheses))], translated_text)
+
+                          # Generate alternatives with confidence scores if quality_level is high
+                          if args.quality_level == 'high' and num_alternatives > 0:
+                              alternatives = []
+                              for i in range(1, len(hypotheses)):
+                                  alt_text = unescape(improve_translation_formatting(text, hypotheses[i].value))
+                                  # Check if hypothesis has a score attribute
+                                  if hasattr(hypotheses[i], 'score'):
+                                      alternatives.append({"text": alt_text, "score": round(hypotheses[i].score, 4)})
+                                  else:
+                                      alternatives.append({"text": alt_text})
+                              # Filter duplicates
+                              seen = {translated_text}
+                              alternatives = [alt for alt in alternatives if alt.get("text", alt) not in seen and not seen.add(alt.get("text", alt))]
+                          else:
+                              alternatives = filter_unique([unescape(improve_translation_formatting(text, hypotheses[i].value)) for i in range(1, len(hypotheses))], translated_text)
                     else:
                       translated_text = text # Cannot translate, send the original text back
                       alternatives = []
@@ -830,12 +865,47 @@ def create_app(args):
 
                 if translatable:
                   if text_format == "html":
-                      translated_text = unescape(str(translate_html(translator, q)))
-                      alternatives = [] # Not supported for html yet
+                      # Generate hypotheses for HTML format based on quality level
+                      if args.quality_level in ['high', 'standard'] and num_alternatives > 0:
+                          # Extract text from HTML and generate multiple translations
+                          from bs4 import BeautifulSoup
+                          soup = BeautifulSoup(q, 'html.parser')
+                          text_content = soup.get_text()
+
+                          # Generate hypotheses for the text content
+                          hypotheses = translator.hypotheses(text_content, num_alternatives + 1)
+
+                          # Use the best translation for HTML
+                          translated_text = unescape(str(translate_html(translator, q)))
+
+                          # Generate alternative HTML translations
+                          alternatives = []
+                          for i in range(1, min(len(hypotheses), num_alternatives + 1)):
+                              # For alternatives, we'll provide translated text versions
+                              alt_text = unescape(improve_translation_formatting(text_content, hypotheses[i].value))
+                              alternatives.append(alt_text)
+                      else:
+                          translated_text = unescape(str(translate_html(translator, q)))
+                          alternatives = []
                   else:
                       hypotheses = translator.hypotheses(q, num_alternatives + 1)
                       translated_text = unescape(improve_translation_formatting(q, hypotheses[0].value))
-                      alternatives = filter_unique([unescape(improve_translation_formatting(q, hypotheses[i].value)) for i in range(1, len(hypotheses))], translated_text)
+
+                      # Generate alternatives with confidence scores if quality_level is high
+                      if args.quality_level == 'high' and num_alternatives > 0:
+                          alternatives = []
+                          for i in range(1, len(hypotheses)):
+                              alt_text = unescape(improve_translation_formatting(q, hypotheses[i].value))
+                              # Check if hypothesis has a score attribute
+                              if hasattr(hypotheses[i], 'score'):
+                                  alternatives.append({"text": alt_text, "score": round(hypotheses[i].score, 4)})
+                              else:
+                                  alternatives.append({"text": alt_text})
+                          # Filter duplicates
+                          seen = {translated_text}
+                          alternatives = [alt for alt in alternatives if alt.get("text", alt) not in seen and not seen.add(alt.get("text", alt))]
+                      else:
+                          alternatives = filter_unique([unescape(improve_translation_formatting(q, hypotheses[i].value)) for i in range(1, len(hypotheses))], translated_text)
                 else:
                   translated_text = q # Cannot translate, send the original text back
                   alternatives = []
@@ -983,7 +1053,7 @@ def create_app(args):
 
             if source_lang == "auto":
                 src_texts = argostranslatefiles.get_texts(filepath)
-                candidate_langs = detect_languages(src_texts)
+                candidate_langs = detect_languages(src_texts, args.min_confidence)
                 detected_src_lang = candidate_langs[0]
                 src_lang = next(iter([l for l in languages if l.code == detected_src_lang["language"]]), None)
                 if src_lang is None:
@@ -1116,7 +1186,7 @@ def create_app(args):
         if not q:
             abort(400, description=_("Invalid request: missing %(name)s parameter", name='q'))
 
-        return jsonify(model2iso(detect_languages(q)))
+        return jsonify(model2iso(detect_languages(q, args.min_confidence)))
 
     @bp.route("/frontend/settings")
     @limiter.exempt
